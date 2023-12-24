@@ -1,14 +1,18 @@
 import time
 import streamlit as st
 from openai import OpenAI
+import config
+from datastore import Datastore
 
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+client = OpenAI(api_key=config.OPENAI_API_KEY)
+db = Datastore()
 query = st.experimental_get_query_params()
 cid = query["cid"][0]
 
 if "thread_id" not in st.session_state:
     thread = client.beta.threads.create()
     st.session_state["thread_id"] = thread.id
+    db.upsert_chat(thread.id)
 
 st.title("Thread #{}".format(st.session_state["thread_id"]))
 
@@ -63,4 +67,6 @@ if prompt := st.chat_input("What is up?"):
             content = message.content[0].text.value
             st.session_state.messages.append({"role": message.role, "content": content})
             message_placeholder.markdown(content)
+
+            db.push_chat_history(st.session_state["thread_id"], prompt, content)
             break
