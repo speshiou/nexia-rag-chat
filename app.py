@@ -1,9 +1,16 @@
+import time
 import streamlit as st
 from openai import OpenAI
 
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+query = st.experimental_get_query_params()
+cid = query["cid"][0]
 
-st.title("ChatGPT-like clone")
+if "thread_id" not in st.session_state:
+    thread = client.beta.threads.create()
+    st.session_state["thread_id"] = thread.id
+
+st.title("Thread #{}".format(st.session_state["thread_id"]))
 
 if "openai_model" not in st.session_state:
     st.session_state["openai_model"] = "gpt-3.5-turbo"
@@ -20,18 +27,40 @@ if prompt := st.chat_input("What is up?"):
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    message = client.beta.threads.messages.create(
+        thread_id=st.session_state["thread_id"],
+        role="user",
+        content=prompt
+    )
+
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
-        full_response = ""
-        stream = client.chat.completions.create(model=st.session_state["openai_model"],
-        messages=[
-            {"role": m["role"], "content": m["content"]}
-            for m in st.session_state.messages
-        ],
-        stream=True)
-        for chunk in stream:
-            delta = chunk.choices[0].delta
-            full_response += delta.content or ""
-            message_placeholder.markdown(full_response + "▌")
-        message_placeholder.markdown(full_response)
-    st.session_state.messages.append({"role": "assistant", "content": full_response})
+
+        run = client.beta.threads.runs.create(
+            thread_id=st.session_state["thread_id"],
+            assistant_id=cid,
+        )
+
+        message_placeholder.markdown(run.status)
+        with st.spinner("Loading..."):
+            # TODO: timeout
+            while run.status != "completed":
+                time.sleep(1)
+
+                run = client.beta.threads.runs.retrieve(
+                    thread_id=st.session_state["thread_id"],
+                    run_id=run.id
+                )
+                message_placeholder.markdown(run.status)
+                print(run)
+
+        messages = client.beta.threads.messages.list(
+            thread_id=st.session_state["thread_id"]
+        )
+
+        for message in messages:
+            print(message)
+            content = message.content[0].text.value
+            st.session_state.messages.append({"role": message.role, "content": content})
+            message_placeholder.markdown(content)
+            break
