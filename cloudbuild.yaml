@@ -10,4 +10,6 @@ steps:
   entrypoint: gcloud
   args: ['run', 'deploy', 'nexia-rag', '--image', 'gcr.io/speshiou/nexia-rag-chat:latest', '--region', 'us-central1']
 images:
-- gcr.io/speshiou/nexia-rag-chat:latest
+  - gcr.io/speshiou/nexia-rag-chat:latest
+options:
+  logging: CLOUD_LOGGING_ONLY
